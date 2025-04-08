@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unified Database Search</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      padding-top: 20px;
+      background-color: #f8f9fa;
+    }
+    .search-container {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .results-container {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+    }
+    .filter-group {
+      margin-bottom: 15px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+    }
+    .result-card {
+      border-left: 4px solid #007bff;
+      margin-bottom: 15px;
+      background-color: #f8f9fa;
+      transition: transform 0.2s;
+    }
+    .result-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .result-lot {
+      border-left-color: #28a745;
+    }
+    .result-locality {
+      border-left-color: #fd7e14;
+    }
+    .result-taxon {
+      border-left-color: #6f42c1;
+    }
+    .result-loan {
+      border-left-color: #dc3545;
+    }
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .result-type-badge {
+      font-size: 0.8rem;
+      padding: 0.25rem 0.5rem;
+    }
+    .filter-badge {
+      margin-right: 5px;
+      margin-bottom: 5px;
+      background-color: #e9ecef;
+      color: #495057;
+      font-weight: normal;
+      display: inline-flex;
+      align-items: center;
+    }
+    .filter-badge i {
+      margin-left: 5px;
+      cursor: pointer;
+    }
+    .filter-badge i:hover {
+      color: #dc3545;
+    }
+    .tab-content {
+      padding-top: 15px;
+    }
+    .nav-tabs .nav-link {
+      position: relative;
+    }
+    .nav-tabs .nav-link .badge {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      font-size: 0.7rem;
+    }
+    .suggestion-item {
+      cursor: pointer;
+      padding: 5px 10px;
+    }
+    .suggestion-item:hover {
+      background-color: #f8f9fa;
+    }
+    #suggestions {
+      position: absolute;
+      width: 100%;
+      z-index: 1000;
+      background: white;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="row mb-4">
+    <div class="col">
+      <h1 class="display-5 text-center">Unified Database Search</h1>
+      <p class="text-center text-muted">Search across lots, localities, taxa, and loans</p>
+    </div>
+  </div>
+
+  <div class="search-container">
+    <div class="row">
+      <div class="col">
+        <div class="input-group mb-3 position-relative">
+          <input type="text" id="search-input" class="form-control form-control-lg"
+                 placeholder="Search across all collections..." aria-label="Search">
+          <button class="btn btn-primary" type="button" id="search-button">
+            <i class="fas fa-search"></i> Search
+          </button>
+          <div id="suggestions"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col">
+        <div id="active-filters" class="d-flex flex-wrap align-items-center">
+          <span class="me-2 text-muted">Active filters:</span>
+          <!-- Active filters will be displayed here -->
+          <span class="text-muted" id="no-filters-message">No active filters</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion" id="filterAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="headingOne">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                  data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+            Advanced Filters
+          </button>
+        </h2>
+        <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne"
+             data-bs-parent="#filterAccordion">
+          <div class="accordion-body">
+            <ul class="nav nav-tabs" id="filterTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="lot-tab" data-bs-toggle="tab"
+                        data-bs-target="#lot-filters" type="button" role="tab"
+                        aria-controls="lot-filters" aria-selected="true">
+                  Lot <span class="badge bg-success">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="locality-tab" data-bs-toggle="tab"
+                        data-bs-target="#locality-filters" type="button" role="tab"
+                        aria-controls="locality-filters" aria-selected="false">
+                  Locality <span class="badge bg-warning text-dark">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="taxon-tab" data-bs-toggle="tab"
+                        data-bs-target="#taxon-filters" type="button" role="tab"
+                        aria-controls="taxon-filters" aria-selected="false">
+                  Taxon <span class="badge bg-primary">0</span>
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="loan-tab" data-bs-toggle="tab"
+                        data-bs-target="#loan-filters" type="button" role="tab"
+                        aria-controls="loan-filters" aria-selected="false">
+                  Loan <span class="badge bg-danger">0</span>
+                </button>
+              </li>
+            </ul>
+            <div class="tab-content" id="filterTabsContent">
+              <!-- Lot Filters -->
+              <div class="tab-pane fade show active" id="lot-filters" role="tabpanel"
+                   aria-labelledby="lot-tab">
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="catalog-number" class="form-label">Catalog Number</label>
+                      <input type="text" class="form-control" id="catalog-number">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="prev-number" class="form-label">Previous Number</label>
+                      <input type="text" class="form-control" id="prev-number">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="jar-size" class="form-label">Jar Size</label>
+                      <select class="form-select" id="jar-size">
+                        <option value="">Any</option>
+                        <option value="250ml">250ml</option>
+                        <option value="500ml">500ml</option>
+                        <option value="1L">1L</option>
+                        <option value="3L">3L</option>
+                        <option value="5L">5L</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="min-number" class="form-label">Min Number</label>
+                      <input type="number" class="form-control" id="min-number" min="1">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="max-number" class="form-label">Max Number</label>
+                      <input type="number" class="form-control" id="max-number" min="1">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="type-status" class="form-label">Type Status</label>
+                      <select class="form-select" id="type-status">
+                        <option value="">Any</option>
+                        <option value="Holotype">Holotype</option>
+                        <option value="Paratype">Paratype</option>
+                        <option value="Neotype">Neotype</option>
+                        <option value="Lectotype">Lectotype</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="inventory" class="form-label">Inventory</label>
+                      <select class="form-select" id="inventory">
+                        <option value="">Any</option>
+                        <option value="Y">Yes</option>
+                        <option value="N">No</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="storage" class="form-label">Storage</label>
+                      <input type="text" class="form-control" id="storage">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="lot-date-cataloged" class="form-label">Date Cataloged</label>
+                      <input type="date" class="form-control" id="lot-date-cataloged">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Locality Filters -->
+              <div class="tab-pane fade" id="locality-filters" role="tabpanel"
+                   aria-labelledby="locality-tab">
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="field-no" class="form-label">Field Number</label>
+                      <input type="text" class="form-control" id="field-no">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="country" class="form-label">Country</label>
+                      <input type="text" class="form-control" id="country">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="continent" class="form-label">Continent</label>
+                      <select class="form-select" id="continent">
+                        <option value="">Any</option>
+                        <option value="Africa">Africa</option>
+                        <option value="Antarctica">Antarctica</option>
+                        <option value="Asia">Asia</option>
+                        <option value="Australia">Australia</option>
+                        <option value="Europe">Europe</option>
+                        <option value="North America">North America</option>
+                        <option value="South America">South America</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="state" class="form-label">State/Province</label>
+                      <input type="text" class="form-control" id="state">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="county" class="form-label">County/District</label>
+                      <input type="text" class="form-control" id="county">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="drainage" class="form-label">Drainage</label>
+                      <input type="text" class="form-control" id="drainage">
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="water-body" class="form-label">Water Body</label>
+                      <input type="text" class="form-control" id="water-body">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="locality-date" class="form-label">Collection Date</label>
+                      <input type="date" class="form-control" id="locality-date">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Taxon Filters -->
+              <div class="tab-pane fade" id="taxon-filters" role="tabpanel"
+                   aria-labelledby="taxon-tab">
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="family-name" class="form-label">Family Name</label>
+                      <input type="text" class="form-control" id="family-name">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="genus" class="form-label">Genus</label>
+                      <input type="text" class="form-control" id="genus">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="species" class="form-label">Species</label>
+                      <input type="text" class="form-control" id="species">
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="subspecies" class="form-label">Subspecies</label>
+                      <input type="text" class="form-control" id="subspecies">
+                    </div>
+                  </div>
+                  <div class="col-md-8">
+                    <div class="mb-3">
+                      <label for="scientific-name" class="form-label">Scientific Name</label>
+                      <input type="text" class="form-control" id="scientific-name">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Loan Filters -->
+              <div class="tab-pane fade" id="loan-filters" role="tabpanel"
+                   aria-labelledby="loan-tab">
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="loan-number" class="form-label">Loan Number</label>
+                      <input type="text" class="form-control" id="loan-number">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="transaction-type" class="form-label">Transaction Type</label>
+                      <select class="form-select" id="transaction-type">
+                        <option value="">Any</option>
+                        <option value="Loan">Loan</option>
+                        <option value="Gift">Gift</option>
+                        <option value="Exchange">Exchange</option>
+                        <option value="Borrow">Borrow</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="lender-name" class="form-label">Lender Name</label>
+                      <input type="text" class="form-control" id="lender-name">
+                    </div>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="loan-date" class="form-label">Loan Date</label>
+                      <input type="date" class="form-control" id="loan-date">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="date-closed" class="form-label">Date Closed</label>
+                      <input type="date" class="form-control" id="date-closed">
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      <label for="is-closed" class="form-label">Status</label>
+                      <select class="form-select" id="is-closed">
+                        <option value="">Any</option>
+                        <option value="true">Closed</option>
+                        <option value="false">Open</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="d-flex justify-content-between mt-3">
+              <button type="button" class="btn btn-secondary" id="clear-filters-btn">Clear All Filters</button>
+              <button type="button" class="btn btn-primary" id="apply-filters-btn">Apply Filters</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-container">
+    <div class="row mb-3">
+      <div class="col">
+        <ul class="nav nav-tabs" id="resultTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="all-tab" data-bs-toggle="tab"
+                    data-bs-target="#all-results" type="button" role="tab"
+                    aria-controls="all-results" aria-selected="true">
+              All <span class="badge bg-secondary" id="all-count">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="lot-results-tab" data-bs-toggle="tab"
+                    data-bs-target="#lot-results" type="button" role="tab"
+                    aria-controls="lot-results" aria-selected="false">
+              Lots <span class="badge bg-success" id="lot-count">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="locality-results-tab" data-bs-toggle="tab"
+                    data-bs-target="#locality-results" type="button" role="tab"
+                    aria-controls="locality-results" aria-selected="false">
+              Localities <span class="badge bg-warning text-dark" id="locality-count">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="taxon-results-tab" data-bs-toggle="tab"
+                    data-bs-target="#taxon-results" type="button" role="tab"
+                    aria-controls="taxon-results" aria-selected="false">
+              Taxa <span class="badge bg-primary" id="taxon-count">0</span>
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="loan-results-tab" data-bs-toggle="tab"
+                    data-bs-target="#loan-results" type="button" role="tab"
+                    aria-controls="loan-results" aria-selected="false">
+              Loans <span class="badge bg-danger" id="loan-count">0</span>
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="row mb-3" id="loading-indicator" style="display: none;">
+      <div class="col text-center py-5">
+        <div class="spinner-border" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Searching...</p>
+      </div>
+    </div>
+
+    <div class="tab-content" id="resultsTabContent">
+      <!-- All Results Tab -->
+      <div class="tab-pane fade show active" id="all-results" role="tabpanel" aria-labelledby="all-tab">
+        <div id="all-results-container">
+          <!-- Results will be populated here -->
+          <div class="text-center text-muted py-5" id="no-results-message">
+            <i class="fas fa-search fa-3x mb-3"></i>
+            <p>Enter a search term to begin</p>
+          </div>
+        </div>
+        <div class="d-flex justify-content-center mt-4" id="pagination-container" style="display: none;">
+          <nav aria-label="Search results pagination">
+            <ul class="pagination">
+              <!-- Pagination will be dynamically generated -->
+            </ul>
+          </nav>
+        </div>
+      </div>
+
+      <!-- Lot Results Tab -->
+      <div class="tab-pane fade" id="lot-results" role="tabpanel" aria-labelledby="lot-results-tab">
+        <div id="lot-results-container">
+          <!-- Lot results will be populated here -->
+        </div>
+      </div>
+
+      <!-- Locality Results Tab -->
+      <div class="tab-pane fade" id="locality-results" role="tabpanel" aria-labelledby="locality-results-tab">
+        <div id="locality-results-container">
+          <!-- Locality results will be populated here -->
+        </div>
+      </div>
+
+      <!-- Taxon Results Tab -->
+      <div class="tab-pane fade" id="taxon-results" role="tabpanel" aria-labelledby="taxon-results-tab">
+        <div id="taxon-results-container">
+          <!-- Taxon results will be populated here -->
+        </div>
+      </div>
+
+      <!-- Loan Results Tab -->
+      <div class="tab-pane fade" id="loan-results" role="tabpanel" aria-labelledby="loan-results-tab">
+        <div id="loan-results-container">
+          <!-- Loan results will be populated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('search-input');
+    const searchButton = document.getElementById('search-button');
+    const applyFiltersBtn = document.getElementById('apply-filters-btn');
+    const clearFiltersBtn = document.getElementById('clear-filters-btn');
+    const activeFilters = document.getElementById('active-filters');
+    const noFiltersMessage = document.getElementById('no-filters-message');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const noResultsMessage = document.getElementById('no-results-message');
+    const paginationContainer = document.getElementById('pagination-container');
+    const suggestionsContainer = document.getElementById('suggestions');
+
+    // Current state
+    let currentPage = 1;
+    let currentSearchQuery = '';
+    let currentFilters = [];
+    let totalPages = 1;
+    let resultsPerPage = 10;
+
+    // Add event listeners
+    searchButton.addEventListener('click', function() {
+      performSearch(1);
+    });
+
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        performSearch(1);
+      }
+    });
+
+    searchInput.addEventListener('input', function() {
+      getSuggestions(this.value);
+    });
+
+    searchInput.addEventListener('focus', function() {
+      if (suggestionsContainer.children.length > 0) {
+        suggestionsContainer.style.display = 'block';
+      }
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!searchInput.contains(e.target) && !suggestionsContainer.contains(e.target)) {
+        suggestionsContainer.style.display = 'none';
+      }
+    });
+
+    applyFiltersBtn.addEventListener('click', function() {
+      collectFilters();
+      updateActiveFiltersDisplay();
+      performSearch(1);
+      // Close the accordion
+      const accordionButton = document.querySelector('.accordion-button');
+      accordionButton.click();
+    });
+
+    clearFiltersBtn.addEventListener('click', function() {
+      clearAllFilters();
+      updateActiveFiltersDisplay();
+      performSearch(1);
+    });
+
+    // Function to get search suggestions
+    function getSuggestions(query) {
+      if (query.length < 2) {
+        suggestionsContainer.style.display = 'none';
+        return;
+      }
+
+      // Simulate API call for suggestions
+      // In real implementation, replace with actual API call
+      fetch(`https://fishnet.tulane.edu/prod-api/api/search/suggest?query=${encodeURIComponent(query)}&field=full_text&size=5`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.code === 20000 && data.data.suggestions && data.data.suggestions.length > 0) {
+            renderSuggestions(data.data.suggestions);
+            suggestionsContainer.style.display = 'block';
+          } else {
+            suggestionsContainer.style.display = 'none';
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching suggestions:', error);
+          suggestionsContainer.style.display = 'none';
+        });
+    }
+
+    // Function to render suggestions
+    function renderSuggestions(suggestions) {
+      suggestionsContainer.innerHTML = '';
+
+      suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.textContent = suggestion;
+        item.addEventListener('click', function() {
+          searchInput.value = suggestion;
+          suggestionsContainer.style.display = 'none';
+          performSearch(1);
+        });
+        suggestionsContainer.appendChild(item);
+      });
+    }
+
+    // Function to collect filters from UI
+    function collectFilters() {
+      currentFilters = [];
+
+      // Lot filters
+      const catalogNumber = document.getElementById('catalog-number').value;
+      const prevNumber = document.getElementById('prev-number').value;
+      const jarSize = document.getElementById('jar-size').value;
+      const minNumber = document.getElementById('min-number').value;
+      const maxNumber = document.getElementById('max-number').value;
+      const typeStatus = document.getElementById('type-status').value;
+      const inventory = document.getElementById('inventory').value;
+      const storage = document.getElementById('storage').value;
+      const lotDateCataloged = document.getElementById('lot-date-cataloged').value;
+
+      if (catalogNumber) addFilter('catalogNumber', '==', catalogNumber, 'Catalog Number');
+      if (prevNumber) addFilter('prevNumber', '==', prevNumber, 'Previous Number');
+      if (jarSize) addFilter('jarSize', '==', jarSize, 'Jar Size');
+      if (minNumber) addFilter('totalNumber', '>=', minNumber, 'Min Number');
+      if (maxNumber) addFilter('totalNumber', '<=', maxNumber, 'Max Number');
+      if (typeStatus) addFilter('typeStatus', '==', typeStatus, 'Type Status');
+      if (inventory) addFilter('inventory', '==', inventory, 'Inventory');
+      if (storage) addFilter('storage', 'like', storage, 'Storage');
+      if (lotDateCataloged) addFilter('dateCataloged', '>=', lotDateCataloged, 'Date Cataloged');
+
+      // Locality filters
+      const fieldNo = document.getElementById('field-no').value;
+      const country = document.getElementById('country').value;
+      const continent = document.getElementById('continent').value;
+      const state = document.getElementById('state').value;
+      const county = document.getElementById('county').value;
+      const drainage = document.getElementById('drainage').value;
+      const waterBody = document.getElementById('water-body').value;
+      const localityDate = document.getElementById('locality-date').value;
+
+      if (fieldNo) addFilter('fieldNo', 'like', fieldNo, 'Field Number');
+      if (country) addFilter('country', 'like', country, 'Country');
+      if (continent) addFilter('continent', '==', continent, 'Continent');
+      if (state) addFilter('state', 'like', state, 'State/Province');
+      if (county) addFilter('county', 'like', county, 'County/District');
+      if (drainage) addFilter('drainage', 'like', drainage, 'Drainage');
+      if (waterBody) addFilter('waterBody', 'like', waterBody, 'Water Body');
+      if (localityDate) addFilter('dateCreated', '>=', localityDate, 'Collection Date');
+
+      // Taxon filters
+      const familyName = document.getElementById('family-name').value;
+      const genus = document.getElementById('genus').value;
+      const species = document.getElementById('species').value;
+      const subspecies = document.getElementById('subspecies').value;
+      const scientificName = document.getElementById('scientific-name').value;
+
+      if (familyName) addFilter('familyName', 'like', familyName, 'Family Name');
+      if (genus) addFilter('genus', 'like', genus, 'Genus');
+      if (species) addFilter('species', 'like', species, 'Species');
+      if (subspecies) addFilter('subspecies', 'like', subspecies, 'Subspecies');
+      if (scientificName) addFilter('scientificName', 'like', scientificName, 'Scientific Name');
+
+      // Loan filters
+      const loanNumber = document.getElementById('loan-number').value;
+      const transactionType = document.getElementById('transaction-type').value;
+      const lenderName = document.getElementById('lender-name').value;
+      const loanDate = document.getElementById('loan-date').value;
+      const dateClosed = document.getElementById('date-closed').value;
+      const isClosed = document.getElementById('is-closed').value;
+
+      if (loanNumber) addFilter('loanNumber', 'like', loanNumber, 'Loan Number');
+      if (transactionType) addFilter('transactionType', '==', transactionType, 'Transaction Type');
+      if (lenderName) addFilter('lenderName', 'like', lenderName, 'Lender Name');
+      if (loanDate) addFilter('loanDate', '>=', loanDate, 'Loan Date');
+      if (dateClosed) addFilter('dateClosed', '>=', dateClosed, 'Date Closed');
+      if (isClosed) addFilter('isClosed', '==', isClosed === 'true', 'Status');
+    }
+
+    // Function to add a filter to the currentFilters array
+    function addFilter(field, op, value, displayName) {
+      currentFilters.push({
+        field: field,
+        op: op,
+        value: value,
+        displayName: displayName
+      });
+    }
+
+    // Function to clear all filters
+    function clearAllFilters() {
+      currentFilters = [];
+
+      // Reset all filter form elements
+      const filterInputs = document.querySelectorAll('.tab-pane input, .tab-pane select');
+      filterInputs.forEach(input => {
+        if (input.type === 'text' || input.type === 'number' || input.type === 'date') {
+          input.value = '';
+        } else if (input.type === 'select-one') {
+          input.selectedIndex = 0;
+        }
+      });
+    }
+
+    // Function to update the display of active filters
+    function updateActiveFiltersDisplay() {
+      if (currentFilters.length === 0) {
+        noFiltersMessage.style.display = 'inline';
+        activeFilters.querySelectorAll('.filter-badge').forEach(el => el.remove());
+        return;
+      }
+
+      noFiltersMessage.style.display = 'none';
+      activeFilters.querySelectorAll('.filter-badge').forEach(el => el.remove());
+
+      currentFilters.forEach((filter, index) => {
+        const badge = document.createElement('span');
+        badge.className = 'filter-badge badge';
+
+        let opDisplay = '';
+        switch (filter.op) {
+          case '==': opDisplay = '='; break;
+          case '>=': opDisplay = '≥'; break;
+          case '<=': opDisplay = '≤'; break;
+          case '>': opDisplay = '>'; break;
+          case '<': opDisplay = '<'; break;
+          case 'like': opDisplay = 'contains'; break;
+          case 'not like': opDisplay = 'not contains'; break;
+          default: opDisplay = filter.op;
+        }
+
+        badge.innerHTML = `${filter.displayName} ${opDisplay} ${filter.value} <i class="fas fa-times" data-index="${index}"></i>`;
+
+        badge.querySelector('i').addEventListener('click', function(e) {
+          e.stopPropagation();
+          const idx = parseInt(this.getAttribute('data-index'));
+          currentFilters.splice(idx, 1);
+          updateActiveFiltersDisplay();
+          performSearch(1);
+        });
+
+        activeFilters.appendChild(badge);
+      });
+    }
+
+    // Function to perform the search
+    function performSearch(page) {
+      currentPage = page;
+      currentSearchQuery = searchInput.value.trim();
+
+      if (currentSearchQuery === '' && currentFilters.length === 0) {
+        noResultsMessage.style.display = 'block';
+        clearResultsContainers();
+        updateCounts({ total: 0, counts: { lot: 0, locality: 0, taxon: 0, loan: 0 } });
+        paginationContainer.style.display = 'none';
+        return;
+      }
+
+      // Show loading indicator
+      loadingIndicator.style.display = 'block';
+      noResultsMessage.style.display = 'none';
+      clearResultsContainers();
+
+      // Prepare request payload
+      const payload = {
+        query: currentSearchQuery,
+        filters: currentFilters.map(f => ({ field: f.field, op: f.op, value: f.value })),
+        page: currentPage,
+        limit: resultsPerPage,
+        include_related: true
+      };
+
+      // Make the API request
+      fetch('https://fishnet.tulane.edu/prod-api/api/search/unified/related', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+        .then(response => response.json())
+        .then(data => {
+          loadingIndicator.style.display = 'none';
+
+          if (data.code === 20000) {
+            const results = data.data;
+
+            if (results.total === 0) {
+              noResultsMessage.style.display = 'block';
+              noResultsMessage.innerHTML = `
+                                <i class="fas fa-search fa-3x mb-3"></i>
+                                <p>No results found for your search</p>
+                            `;
+              paginationContainer.style.display = 'none';
+            } else {
+              noResultsMessage.style.display = 'none';
+              renderResults(results);
+              updateCounts(results);
+
+              // Set up pagination
+              totalPages = Math.ceil(results.total / resultsPerPage);
+              renderPagination(currentPage, totalPages);
+              paginationContainer.style.display = 'flex';
+            }
+          } else {
+            displayError('Error performing search. Please try again.');
+          }
+        })
+        .catch(error => {
+          loadingIndicator.style.display = 'none';
+          displayError('Network error. Please check your connection and try again.');
+          console.error('Error:', error);
+        });
+    }
+
+    // Function to render search results
+    function renderResults(results) {
+      const allResultsContainer = document.getElementById('all-results-container');
+      const lotResultsContainer = document.getElementById('lot-results-container');
+      const localityResultsContainer = document.getElementById('locality-results-container');
+      const taxonResultsContainer = document.getElementById('taxon-results-container');
+      const loanResultsContainer = document.getElementById('loan-results-container');
+
+      // Clear previous results
+      clearResultsContainers();
+
+      // Process results by type
+      renderResultsByType('lot', results.results.lot, allResultsContainer, lotResultsContainer);
+      renderResultsByType('locality', results.results.locality, allResultsContainer, localityResultsContainer);
+      renderResultsByType('taxon', results.results.taxon, allResultsContainer, taxonResultsContainer);
+      renderResultsByType('loan', results.results.loan, allResultsContainer, loanResultsContainer);
+
+      // If no results in specific tabs, show message
+      ['lot', 'locality', 'taxon', 'loan'].forEach(type => {
+        const container = document.getElementById(`${type}-results-container`);
+        if (container.children.length === 0) {
+          const emptyMessage = document.createElement('div');
+          emptyMessage.className = 'text-center text-muted py-4';
+          emptyMessage.innerHTML = `<p>No ${type} results found</p>`;
+          container.appendChild(emptyMessage);
+        }
+      });
+    }
+
+    // Function to render results by type
+    function renderResultsByType(type, items, allContainer, typeContainer) {
+      if (!items || items.length === 0) return;
+
+      items.forEach(item => {
+        // Create result card
+        const card = createResultCard(type, item);
+
+        // Add to all results container
+        allContainer.appendChild(card.cloneNode(true));
+
+        // Add to type-specific container
+        typeContainer.appendChild(card);
+      });
+    }
+
+    // Function to create a result card based on document type
+    function createResultCard(type, item) {
+      const card = document.createElement('div');
+      card.className = `card result-card result-${type} mb-3`;
+
+      let cardContent = '';
+
+      // Card header with title and badge
+      const headerTitle = getCardTitle(type, item);
+      const badgeClass = getBadgeClass(type);
+      const typeName = getTypeName(type);
+
+      cardContent += `
+                    <div class="card-header bg-light result-header">
+                        <h5 class="card-title mb-0">${headerTitle}</h5>
+                        <span class="badge ${badgeClass} result-type-badge">${typeName}</span>
+                    </div>
+                `;
+
+      // Card body
+      cardContent += `<div class="card-body">`;
+
+      // Add type-specific content
+      switch (type) {
+        case 'lot':
+          cardContent += getLotCardContent(item);
+          break;
+        case 'locality':
+          cardContent += getLocalityCardContent(item);
+          break;
+        case 'taxon':
+          cardContent += getTaxonCardContent(item);
+          break;
+        case 'loan':
+          cardContent += getLoanCardContent(item);
+          break;
+      }
+
+      // Add remarks if available
+      if (item.remarks) {
+        cardContent += `
+                        <div class="mt-2">
+                            <small class="text-muted">Remarks: ${item.remarks}</small>
+                        </div>
+                    `;
+      }
+
+      cardContent += `</div>`;
+
+      // Card footer with details link
+      cardContent += `
+                    <div class="card-footer bg-white d-flex justify-content-end">
+                        <button class="btn btn-sm btn-outline-primary view-details-btn"
+                                data-type="${type}" data-id="${item.source_id}">
+                            <i class="fas fa-search-plus me-1"></i> View Details
+                        </button>
+                    </div>
+                `;
+
+      card.innerHTML = cardContent;
+
+      // Add event listener to view details button
+      card.querySelector('.view-details-btn').addEventListener('click', function() {
+        const detailType = this.getAttribute('data-type');
+        const detailId = this.getAttribute('data-id');
+        showDetails(detailType, detailId);
+      });
+
+      return card;
+    }
+
+    // Functions to get card content by type
+    function getLotCardContent(item) {
+      let content = `<div class="row">`;
+
+      // Left column
+      content += `<div class="col-md-6">`;
+      if (item.scientific_name) {
+        content += `<p><strong>Scientific Name:</strong> ${item.scientific_name}</p>`;
+      }
+      if (item.total_number) {
+        content += `<p><strong>Total Number:</strong> ${item.total_number}</p>`;
+      }
+      if (item.jar_size) {
+        content += `<p><strong>Jar Size:</strong> ${item.jar_size}</p>`;
+      }
+      if (item.type_status) {
+        content += `<p><strong>Type Status:</strong> ${item.type_status}</p>`;
+      }
+      content += `</div>`;
+
+      // Right column
+      content += `<div class="col-md-6">`;
+      if (item.field_no) {
+        content += `<p><strong>Field Number:</strong> ${item.field_no}</p>`;
+      }
+      if (item.locality_string) {
+        content += `<p><strong>Locality:</strong> ${item.locality_string}</p>`;
+      } else if (item.country || item.state) {
+        let location = [];
+        if (item.country) location.push(item.country);
+        if (item.state) location.push(item.state);
+        content += `<p><strong>Location:</strong> ${location.join(', ')}</p>`;
+      }
+      if (item.date_cataloged) {
+        content += `<p><strong>Date Cataloged:</strong> ${formatDate(item.date_cataloged)}</p>`;
+      }
+      content += `</div>`;
+
+      content += `</div>`;
+      return content;
+    }
+
+    function getLocalityCardContent(item) {
+      let content = `<div class="row">`;
+
+      // Left column
+      content += `<div class="col-md-6">`;
+      if (item.locality_string) {
+        content += `<p><strong>Locality:</strong> ${item.locality_string}</p>`;
+      }
+      if (item.field_no) {
+        content += `<p><strong>Field Number:</strong> ${item.field_no}</p>`;
+      }
+      if (item.continent) {
+        content += `<p><strong>Continent:</strong> ${item.continent}</p>`;
+      }
+      content += `</div>`;
+
+      // Right column
+      content += `<div class="col-md-6">`;
+      if (item.country) {
+        content += `<p><strong>Country:</strong> ${item.country}</p>`;
+      }
+      if (item.state) {
+        content += `<p><strong>State/Province:</strong> ${item.state}</p>`;
+      }
+      if (item.county) {
+        content += `<p><strong>County/District:</strong> ${item.county}</p>`;
+      }
+      if (item.water_body || item.drainage) {
+        let waterInfo = [];
+        if (item.water_body) waterInfo.push(item.water_body);
+        if (item.drainage) waterInfo.push(`Drainage: ${item.drainage}`);
+        content += `<p><strong>Water:</strong> ${waterInfo.join(', ')}</p>`;
+      }
+      content += `</div>`;
+
+      content += `</div>`;
+
+      // Coordinates if available
+      if (item.lat && item.lon) {
+        content += `
+                        <div class="mt-2">
+                            <p><strong>Coordinates:</strong> ${item.lat}, ${item.lon}</p>
+                        </div>
+                    `;
+      }
+
+      return content;
+    }
+
+    function getTaxonCardContent(item) {
+      let content = `<div class="row">`;
+
+      // Left column
+      content += `<div class="col-md-6">`;
+      if (item.scientific_name) {
+        content += `<p><strong>Scientific Name:</strong> ${item.scientific_name}</p>`;
+      } else {
+        let nameComponents = [];
+        if (item.genus) nameComponents.push(item.genus);
+        if (item.species) nameComponents.push(item.species);
+        if (item.subspecies) nameComponents.push(item.subspecies);
+        if (nameComponents.length > 0) {
+          content += `<p><strong>Name:</strong> ${nameComponents.join(' ')}</p>`;
+        }
+      }
+      content += `</div>`;
+
+      // Right column
+      content += `<div class="col-md-6">`;
+      if (item.family_name) {
+        content += `<p><strong>Family:</strong> ${item.family_name}</p>`;
+      }
+      content += `</div>`;
+
+      content += `</div>`;
+      return content;
+    }
+
+    function getLoanCardContent(item) {
+      let content = `<div class="row">`;
+
+      // Left column
+      content += `<div class="col-md-6">`;
+      if (item.loan_number) {
+        content += `<p><strong>Loan Number:</strong> ${item.loan_number}</p>`;
+      }
+      if (item.transaction_type) {
+        content += `<p><strong>Transaction Type:</strong> ${item.transaction_type}</p>`;
+      }
+      if (item.lender_name) {
+        content += `<p><strong>Lender:</strong> ${item.lender_name}</p>`;
+      }
+      content += `</div>`;
+
+      // Right column
+      content += `<div class="col-md-6">`;
+      if (item.loan_date) {
+        content += `<p><strong>Loan Date:</strong> ${formatDate(item.loan_date)}</p>`;
+      }
+      if (item.date_closed && item.date_closed !== '1000-01-01') {
+        content += `<p><strong>Date Closed:</strong> ${formatDate(item.date_closed)}</p>`;
+      }
+      if (item.is_closed !== undefined) {
+        const status = item.is_closed ? 'Closed' : 'Open';
+        const statusClass = item.is_closed ? 'text-danger' : 'text-success';
+        content += `<p><strong>Status:</strong> <span class="${statusClass}">${status}</span></p>`;
+      }
+      content += `</div>`;
+
+      content += `</div>`;
+
+      // Address information if available
+      if (item.address || item.city || item.state || item.country) {
+        let addressParts = [];
+        if (item.address) addressParts.push(item.address);
+        if (item.city) addressParts.push(item.city);
+        if (item.state) addressParts.push(item.state);
+        if (item.country) addressParts.push(item.country);
+
+        if (addressParts.length > 0) {
+          content += `
+                            <div class="mt-2">
+                                <p><strong>Shipping Address:</strong> ${addressParts.join(', ')}</p>
+                            </div>
+                        `;
+        }
+      }
+
+      return content;
+    }
+
+    // Helper functions for card creation
+    function getCardTitle(type, item) {
+      switch (type) {
+        case 'lot':
+          return `Lot: ${item.catalog_number || item.source_id}`;
+        case 'locality':
+          return `Locality: ${item.field_no || item.locality_string || item.source_id}`;
+        case 'taxon':
+          return `Taxon: ${item.scientific_name || (item.genus && item.species ? item.genus + ' ' + item.species : item.source_id)}`;
+        case 'loan':
+          return `Loan: ${item.loan_number || item.source_id}`;
+        default:
+          return `Item: ${item.source_id}`;
+      }
+    }
+
+    function getBadgeClass(type) {
+      switch (type) {
+        case 'lot': return 'bg-success';
+        case 'locality': return 'bg-warning text-dark';
+        case 'taxon': return 'bg-primary';
+        case 'loan': return 'bg-danger';
+        default: return 'bg-secondary';
+      }
+    }
+
+    function getTypeName(type) {
+      switch (type) {
+        case 'lot': return 'Lot';
+        case 'locality': return 'Locality';
+        case 'taxon': return 'Taxon';
+        case 'loan': return 'Loan';
+        default: return 'Item';
+      }
+    }
+
+    // Function to format dates
+    function formatDate(dateString) {
+      if (!dateString || dateString === '1000-01-01') return '';
+
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString();
+      } catch (e) {
+        return dateString;
+      }
+    }
+
+    // Function to clear result containers
+    function clearResultsContainers() {
+      const containers = [
+        'all-results-container',
+        'lot-results-container',
+        'locality-results-container',
+        'taxon-results-container',
+        'loan-results-container'
+      ];
+
+      containers.forEach(id => {
+        const container = document.getElementById(id);
+        container.innerHTML = '';
+      });
+    }
+
+    // Function to update result counts
+    function updateCounts(results) {
+      const allCount = document.getElementById('all-count');
+      const lotCount = document.getElementById('lot-count');
+      const localityCount = document.getElementById('locality-count');
+      const taxonCount = document.getElementById('taxon-count');
+      const loanCount = document.getElementById('loan-count');
+
+      allCount.textContent = results.total || 0;
+      lotCount.textContent = results.counts?.lot || 0;
+      localityCount.textContent = results.counts?.locality || 0;
+      taxonCount.textContent = results.counts?.taxon || 0;
+      loanCount.textContent = results.counts?.loan || 0;
+
+      // Also update filter tab badges
+      document.querySelector('#lot-tab .badge').textContent = results.counts?.lot || 0;
+      document.querySelector('#locality-tab .badge').textContent = results.counts?.locality || 0;
+      document.querySelector('#taxon-tab .badge').textContent = results.counts?.taxon || 0;
+      document.querySelector('#loan-tab .badge').textContent = results.counts?.loan || 0;
+    }
+
+    // Function to render pagination
+    function renderPagination(currentPage, totalPages) {
+      const paginationEl = document.querySelector('.pagination');
+      paginationEl.innerHTML = '';
+
+      // Previous button
+      const prevLi = document.createElement('li');
+      prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+      prevLi.innerHTML = `
+                    <a class="page-link" href="#" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                `;
+      if (currentPage > 1) {
+        prevLi.addEventListener('click', () => performSearch(currentPage - 1));
+      }
+      paginationEl.appendChild(prevLi);
+
+      // Page numbers
+      let startPage = Math.max(1, currentPage - 2);
+      let endPage = Math.min(totalPages, startPage + 4);
+
+      if (endPage - startPage < 4) {
+        startPage = Math.max(1, endPage - 4);
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        const pageLi = document.createElement('li');
+        pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        pageLi.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+
+        if (i !== currentPage) {
+          pageLi.addEventListener('click', () => performSearch(i));
+        }
+
+        paginationEl.appendChild(pageLi);
+      }
+
+      // Next button
+      const nextLi = document.createElement('li');
+      nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+      nextLi.innerHTML = `
+                    <a class="page-link" href="#" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                `;
+      if (currentPage < totalPages) {
+        nextLi.addEventListener('click', () => performSearch(currentPage + 1));
+      }
+      paginationEl.appendChild(nextLi);
+    }
+
+    // Function to display error message
+    function displayError(message) {
+      noResultsMessage.style.display = 'block';
+      noResultsMessage.innerHTML = `
+                    <i class="fas fa-exclamation-circle fa-3x mb-3 text-danger"></i>
+                    <p class="text-danger">${message}</p>
+                `;
+    }
+
+    // Function to show details modal for an item
+    function showDetails(type, id) {
+      // Implementation for details view
+      // In a real application, this would fetch detailed data from an API endpoint
+      alert(`View details for ${type} with ID ${id}`);
+
+      // Example of API call for details:
+      /*
+      fetch(`/api/${type}/${id}`)
+          .then(response => response.json())
+          .then(data => {
+              if (data.code === 20000) {
+                  // Create and show modal with detailed information
+                  showDetailModal(type, data.data);
+              } else {
+                  alert('Error loading details. Please try again.');
+              }
+          })
+          .catch(error => {
+              console.error('Error:', error);
+              alert('Network error. Please check your connection and try again.');
+          });
+      */
+    }
+  });
+</script>
+</body>
+</html>
